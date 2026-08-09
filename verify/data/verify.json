@@ -1,0 +1,17 @@
+{
+  "ok": true,
+  "length": 20,
+  "feeRowsChecked": 3,
+  "errorCount": 0,
+  "merkleRoots": {
+    "2026-07-06": "3c9f55546394ffb65e3b09620dad06252c3ed2b9caf12b5adcb5c68f861a03f8",
+    "2026-07-14": "c24e1fa0c4098adc9ca05e8fe92e5ef91b0b3703999bffd64713360f5e39af5e",
+    "2026-07-15": "b2a0efd3e47c26d4f677178e086bd42b6c2cb69296a7392acf524efc91854c10",
+    "2026-07-16": "f67dac99d8bd2ddf7d7e759cd71050a569e840714ebac3deeff49659e8582f51",
+    "2026-08-15": "3fa3b045284a1fd535ff2ca3fefb16270be72872e565d71682671620b416d744",
+    "2026-09-14": "adf54f63c8e5ef2e2e48182e7a516d0985d69cc54ac96290a9bcb4145bf559b4"
+  },
+  "verifier": "node:crypto — Ed25519 signatures + SHA-256 hash chain",
+  "note": "This report is PRE-COMPUTED. The verifier uses node:crypto and runs in Node, not the browser; re-run it yourself with the command below.",
+  "command": "npm run verify:ledger"
+}

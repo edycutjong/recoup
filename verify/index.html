@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Recoup — /verify decision replay</title>
+<style>
+  :root{
+    --ink:#0A1E30; --panel:#0F2A43; --panel-2:#123350; --line:#1F3E5A; --line-2:#28486a;
+    --emerald:#10B981; --emerald-dim:#0e9d70; --mint:#2DD4BF; --amber:#F0B429; --red:#EF4444;
+    --text:#E9F2F7; --text-2:#B7CBDA; --muted:#82A0B4; --muted-2:#5f7d92;
+    --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
+    --r:14px; --r-sm:9px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(1200px 620px at 82% -8%, rgba(45,212,191,.10), transparent 60%),
+      radial-gradient(1000px 560px at 8% 4%, rgba(16,185,129,.10), transparent 55%),
+      var(--ink);
+    color:var(--text); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; line-height:1.5; letter-spacing:.1px;
+  }
+  .page{max-width:1360px; margin:0 auto; padding:30px 26px 64px}
+  a{color:var(--mint); text-decoration:none}
+  h1,h2,h3{margin:0; font-weight:700; letter-spacing:-.2px}
+  .mono{font-family:var(--mono)}
+  .hash{font-family:var(--mono); font-size:11.5px; color:var(--muted)}
+
+  /* ---------- header ---------- */
+  header#hero{display:flex; flex-wrap:wrap; gap:18px 26px; align-items:flex-start; justify-content:space-between; padding-bottom:22px; border-bottom:1px solid var(--line)}
+  .brand{display:flex; align-items:center; gap:14px}
+  .glyph{width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-size:22px;
+    background:linear-gradient(145deg,var(--emerald),var(--mint)); color:#062018; box-shadow:0 8px 26px rgba(16,185,129,.34); flex:0 0 auto}
+  .brand h1{font-size:23px}
+  .brand .sub{color:var(--muted); font-size:13px; margin-top:3px}
+  .brand .sub b{color:var(--text-2); font-weight:600}
+  .hero-right{display:flex; flex-direction:column; align-items:flex-end; gap:9px}
+  .badge{display:inline-flex; align-items:center; gap:7px; font-size:12px; font-weight:600; padding:6px 12px; border-radius:999px; border:1px solid var(--line-2); background:var(--panel)}
+  .badge.fixture{color:#12222c; background:linear-gradient(180deg,#f6c65a,var(--amber)); border-color:transparent}
+  .badge.ok{color:var(--emerald)}
+  .badge .dot{width:7px;height:7px;border-radius:50%;background:currentColor}
+  .case-line{color:var(--muted); font-size:12.5px; text-align:right}
+  .case-line b{color:var(--text-2)}
+
+  /* ---------- counters ---------- */
+  .counters{display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin:26px 0 8px}
+  .tile{background:linear-gradient(180deg,var(--panel),#0d2439); border:1px solid var(--line); border-radius:var(--r); padding:18px 20px; position:relative; overflow:hidden}
+  .tile .k{font-size:11.5px; letter-spacing:.10em; text-transform:uppercase; color:var(--muted); font-weight:600}
+  .tile .v{font-size:34px; font-weight:800; margin-top:8px; font-variant-numeric:tabular-nums; letter-spacing:-1px}
+  .tile .foot{font-size:11.5px; color:var(--muted-2); margin-top:6px}
+  .tile.rec .v{background:linear-gradient(120deg,var(--emerald),var(--mint)); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .tile.viol{border-color:rgba(16,185,129,.5); box-shadow:0 0 0 1px rgba(16,185,129,.18) inset}
+  .tile.viol .v{color:var(--emerald); display:flex; align-items:center; gap:12px}
+  .tile.viol.breach{border-color:rgba(239,68,68,.6)} .tile.viol.breach .v{color:var(--red)}
+  .tile .check{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:rgba(16,185,129,.16);border:1.5px solid var(--emerald);font-size:16px}
+
+  /* ---------- section frames ---------- */
+  section.frame{margin-top:26px; background:rgba(15,42,67,.55); border:1px solid var(--line); border-radius:18px; overflow:hidden}
+  .frame > .head{display:flex; align-items:baseline; justify-content:space-between; gap:14px; padding:16px 22px; border-bottom:1px solid var(--line); background:rgba(10,30,48,.5)}
+  .frame > .head h2{font-size:15px}
+  .frame > .head .note{color:var(--muted); font-size:12px}
+  .frame > .body{padding:22px}
+
+  /* ---------- split screen ---------- */
+  .split{display:grid; grid-template-columns:1fr 1.15fr; gap:0}
+  .split .col{padding:22px}
+  .split .col.left{border-right:1px solid var(--line); background:rgba(10,26,42,.35)}
+  .col .col-title{display:flex; align-items:center; gap:9px; font-size:12px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); font-weight:700; margin-bottom:16px}
+  .col .col-title .pip{width:8px;height:8px;border-radius:50%}
+  .pip.blue{background:#5fa8ff} .pip.em{background:var(--emerald)}
+
+  /* email thread */
+  .mail{border:1px solid var(--line); border-radius:12px; padding:13px 15px; margin-bottom:13px; background:var(--panel)}
+  .mail.debtor{margin-left:26px; background:#0c2135; border-color:var(--line-2)}
+  .mail.agent{margin-right:26px}
+  .mail.hi{border-color:var(--mint); box-shadow:0 0 0 1px rgba(45,212,191,.35), 0 10px 30px rgba(0,0,0,.28)}
+  .mail .mh{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:7px}
+  .who{display:inline-flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700}
+  .who .av{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-size:11px;font-weight:800}
+  .agent .av{background:linear-gradient(145deg,var(--emerald),var(--mint));color:#062018}
+  .debtor .av{background:#20415c;color:#bcd6ea}
+  .mail .day{font-size:11px;color:var(--muted-2);font-family:var(--mono)}
+  .mail .subj{font-size:12px;color:var(--text-2);font-weight:600;margin-bottom:5px}
+  .mail .body{font-size:13px;color:var(--text-2);line-height:1.55}
+  .mail.hi .body{color:var(--text)}
+  .reply-tag{display:inline-block;margin:2px 0 12px 26px;font-size:11px;color:var(--mint);font-weight:600}
+  .reply-tag::before{content:"↳ "}
+
+  /* ledger stream */
+  .stream{display:flex; flex-direction:column; gap:9px}
+  .drow{position:relative; border:1px solid var(--line); border-left:3px solid var(--line-2); border-radius:10px; padding:10px 13px 10px 14px; background:var(--panel); opacity:1}
+  .drow.key{border-left-color:var(--emerald); background:linear-gradient(90deg,rgba(16,185,129,.08),rgba(15,42,67,.2))}
+  .drow.crit{border-left-color:var(--mint)}
+  .drow.money{border-left-color:var(--emerald); background:linear-gradient(90deg,rgba(16,185,129,.13),rgba(15,42,67,.2))}
+  .drow .r1{display:flex; align-items:center; gap:9px}
+  .seq{font-family:var(--mono); font-size:11px; color:var(--muted-2); min-width:26px}
+  .chip{font-size:10.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; padding:2px 8px; border-radius:6px; background:#183050; color:var(--text-2); border:1px solid var(--line-2)}
+  .chip.em{background:rgba(16,185,129,.16); color:var(--emerald); border-color:rgba(16,185,129,.4)}
+  .chip.mint{background:rgba(45,212,191,.14); color:var(--mint); border-color:rgba(45,212,191,.4)}
+  .chip.blue{background:rgba(95,168,255,.14); color:#8fc0ff; border-color:rgba(95,168,255,.35)}
+  .drow .title{font-size:13px; font-weight:650; color:var(--text)}
+  .drow .detail{font-size:11.5px; color:var(--muted); margin-top:5px; margin-left:35px; line-height:1.5}
+  .drow .h{margin-left:auto}
+
+  @media (prefers-reduced-motion: no-preference){
+    .drow{animation:slidein .5s cubic-bezier(.2,.7,.3,1) both; animation-delay:calc(var(--i,0) * 75ms)}
+    @keyframes slidein{from{opacity:0; transform:translateY(9px)} to{opacity:1; transform:none}}
+  }
+
+  /* ---------- money shot ---------- */
+  .money-grid{display:grid; grid-template-columns:1.1fr 1fr; gap:22px}
+  .shot{border:1px solid rgba(16,185,129,.45); border-radius:14px; padding:20px; background:linear-gradient(180deg,rgba(16,185,129,.12),rgba(15,42,67,.35))}
+  .shot .lead{font-size:12px; text-transform:uppercase; letter-spacing:.09em; color:var(--emerald); font-weight:700}
+  .shot .big{font-size:26px; font-weight:800; margin:9px 0 3px; letter-spacing:-.5px}
+  .shot .big .amt{background:linear-gradient(120deg,var(--emerald),var(--mint)); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .causal{margin-top:16px; border-top:1px dashed var(--line-2); padding-top:14px}
+  .causal .lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-weight:600; margin-bottom:9px}
+  .link-node{display:flex; align-items:center; gap:10px; font-size:12.5px; padding:7px 0; color:var(--text-2)}
+  .link-node .ic{width:22px;height:22px;border-radius:6px;background:rgba(45,212,191,.16);border:1px solid rgba(45,212,191,.4);display:grid;place-items:center;font-size:11px;color:var(--mint);flex:0 0 auto}
+  .link-node .lh{margin-left:auto}
+  .plan-card{border:1px solid var(--line); border-radius:14px; padding:20px; background:var(--panel)}
+  .plan-card h3{font-size:13px; color:var(--text-2); margin-bottom:14px; font-weight:650}
+  .inst{display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--line)}
+  .inst:last-child{border-bottom:0}
+  .inst .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:800;background:rgba(16,185,129,.18);color:var(--emerald);border:1px solid rgba(16,185,129,.4);flex:0 0 auto}
+  .inst .amt{font-weight:700; font-variant-numeric:tabular-nums}
+  .inst .meta{font-size:11.5px; color:var(--muted); margin-left:auto; text-align:right}
+  .inst .paid{color:var(--emerald); font-weight:700; font-size:11.5px}
+
+  /* ---------- two column: simulator + verify ---------- */
+  .two{display:grid; grid-template-columns:1.05fr .95fr; gap:22px; margin-top:26px}
+  .two > section.frame{margin-top:0}
+  .meter{margin:6px 0 20px}
+  .meter .mtop{display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px}
+  .meter .pct{font-size:30px; font-weight:800; letter-spacing:-1px; background:linear-gradient(120deg,var(--emerald),var(--mint)); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .meter .cap{font-size:12px; color:var(--muted)}
+  .track{height:12px; border-radius:999px; background:#0b2135; border:1px solid var(--line); overflow:hidden}
+  .fill{height:100%; border-radius:999px; background:linear-gradient(90deg,var(--emerald-dim),var(--mint))}
+  .simstats{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:18px}
+  .simstat{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; text-align:center}
+  .simstat .v{font-size:20px; font-weight:800} .simstat .k{font-size:11px; color:var(--muted); margin-top:3px}
+  .simstat.zero .v{color:var(--emerald)}
+  .ptable{width:100%; border-collapse:collapse; font-size:12px}
+  .ptable th{text-align:left; color:var(--muted); font-weight:600; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; padding:7px 8px; border-bottom:1px solid var(--line)}
+  .ptable td{padding:7px 8px; border-bottom:1px solid rgba(31,62,90,.5); color:var(--text-2)}
+  .ptable td.r{text-align:right; font-variant-numeric:tabular-nums; font-family:var(--mono); font-size:11px}
+  .state-pill{font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:6px}
+  .state-pill.PAID{background:rgba(16,185,129,.16); color:var(--emerald)}
+  .state-pill.OPTED_OUT{background:rgba(95,168,255,.14); color:#8fc0ff}
+  .state-pill.WRITEOFF_RECOMMENDED{background:#3a2a12; color:var(--amber)}
+  .state-pill.CLIENT{background:#2a2140; color:#b79bff}
+  .v0{color:var(--emerald); font-weight:700}
+
+  .merkle{border:1px solid var(--line); border-radius:10px; background:#0b2135; padding:14px 16px; margin-bottom:16px}
+  .merkle .mrow{display:flex; gap:12px; align-items:baseline; padding:5px 0; font-family:var(--mono); font-size:11px}
+  .merkle .mrow .d{color:var(--mint); min-width:92px} .merkle .mrow .rt{color:var(--muted); word-break:break-all}
+  .cmd{display:flex; align-items:center; gap:10px; background:#07131f; border:1px solid var(--line-2); border-radius:9px; padding:11px 14px; font-family:var(--mono); font-size:13px; color:var(--text)}
+  .cmd .p{color:var(--emerald)}
+  .vnote{font-size:11.5px; color:var(--muted); margin-top:12px; line-height:1.55}
+  .vnote b{color:var(--text-2)}
+  .vkpi{display:flex; gap:20px; margin-bottom:16px; flex-wrap:wrap}
+  .vkpi div{font-size:12px; color:var(--muted)} .vkpi div b{display:block; font-size:17px; color:var(--text); font-family:var(--mono); margin-top:2px}
+  .vkpi div.ok b{color:var(--emerald)}
+
+  footer{margin-top:34px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted-2); font-size:12px; display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; justify-content:space-between}
+  footer .disc{max-width:760px; line-height:1.55}
+
+  @media (max-width:1080px){
+    .counters{grid-template-columns:repeat(2,1fr)} .split{grid-template-columns:1fr}
+    .split .col.left{border-right:0; border-bottom:1px solid var(--line)}
+    .money-grid,.two{grid-template-columns:1fr} .simstats{grid-template-columns:repeat(3,1fr)}
+  }
+</style>
+</head>
+<body data-palette="#10B981,#2DD4BF,#5fa8ff,#F0B429">
+<script type="application/json" id="recoup-data">{"generatedAtIso":"2026-07-05T00:32:48.284Z","disclosure":"FIXTURE / offline demo data — deterministic self_test run, not live production.","case":{"invoiceId":"INV-2026-0187","debtorEntity":"Bluebonnet Media LLC","debtorContact":"Dale Kirby","debtorEmail":"dale@fixture-bluebonnet.example","clientName":"Mara Voss Design","amountCents":480000,"agedDays":87,"state":"CA","synthetic":true},"policy":{"floorPct":60,"maxInstallments":3,"quietHours":{"startHour":21,"endHour":8},"maxTouchesPerWeek":5,"legalLanguage":false},"thread":[{"party":"agent","kind":"cadence_reminder","ts":"2026-07-06T10:00:00.000Z","day":0,"subject":"Invoice INV-2026-0187 — friendly nudge","body":"Hi Dale Kirby,\n\nHope things are going well. Just a friendly note that invoice INV-2026-0187 for $4800.00 is now 87 days past due. You can settle it in a few seconds here: https://pay.fixture.recoup.local/INV-2026-0187/0/1\n\nIf it has already been taken care of, please ignore this.\n\nBest,\nMara Voss Design"},{"party":"debtor","kind":"hardship_reply","ts":"2026-07-14T10:00:00.000Z","day":8,"subject":"Re: your reminder","body":"Hey — appreciate the work, honestly things are tight this quarter, maybe later? We want to make this right but cash flow is rough right now."},{"party":"agent","kind":"plan_proposal","ts":"2026-07-14T10:00:00.000Z","day":8,"subject":"Invoice INV-2026-0187 — a payment plan that works","body":"Hi Dale Kirby,\n\nThanks for being straight with me about cash timing — that helps. Here is what I can do on invoice INV-2026-0187 ($4800.00): 3 installments of $1600.00 + $1600.00 + $1600.00, 30 days apart.\n\nFirst installment link: https://pay.fixture.recoup.local/INV-2026-0187/0/2\nIf that structure works, just reply \"agreed\" and the schedule is locked.\n\nBest,\nMara Voss Design"},{"party":"debtor","kind":"acceptance_reply","ts":"2026-07-15T10:00:00.000Z","day":9,"subject":"Re: payment plan","body":"Agreed — that works for us. Send over the schedule."}],"decisions":[{"seq":0,"ts":"2026-07-06T10:00:00.000Z","day":0,"actor":"intake","kind":"intake","entryHash":"031ccea6d68d8d771e5ab1473a34af3c99633cee79c7cbd28547df13eed26947","refs":[],"title":"Invoice intake","detail":"$4800.00 · Bluebonnet Media LLC · 87d aged · b2b"},{"seq":1,"ts":"2026-07-06T10:00:00.000Z","day":0,"actor":"intake","kind":"mandate_signed","entryHash":"3d9598ad16bed22e5ce3afd7e0299e42f5e179a6a1a68cbacf260b1afccad092","refs":[],"title":"Mandate signed","detail":"floor 60% · ≤3 installments · quiet 21-8 · legal=false"},{"seq":2,"ts":"2026-07-06T10:00:00.000Z","day":0,"actor":"critic","kind":"critic_receipt","entryHash":"79a7ab504a8aa204912ebb09db552492e320552d1249996fc90eec208484496c","refs":[],"title":"Critic PASS","detail":"deterministic-critic · reviewed sha256 563e5cd46d83…"},{"seq":3,"ts":"2026-07-06T10:00:00.000Z","day":0,"actor":"mandate_gate","kind":"policy_check","entryHash":"e2b8a339ddbfdfdaf5419d74beaaf186a507e97c7b17d3947e392a08ffd29fa0","refs":[],"title":"Policy gate ✓ authorized","detail":"checks: I3:not-opted-out, I2:quiet-hours, I2:touch-cap, I4:legal-toggle · floor $2880.00"},{"seq":4,"ts":"2026-07-06T10:00:00.000Z","day":0,"actor":"sender","kind":"send","entryHash":"b6a8a530be9137aecc6a803dbea47591cf0bac9e0492b5840ac47228976deb9a","refs":["79a7ab504a8aa204912ebb09db552492e320552d1249996fc90eec208484496c","e2b8a339ddbfdfdaf5419d74beaaf186a507e97c7b17d3947e392a08ffd29fa0"],"title":"Email sent","detail":"cadence_1 → dale@fixture-bluebonnet.example · msg d3aedb2bc730…"},{"seq":5,"ts":"2026-07-14T10:00:00.000Z","day":8,"actor":"classifier","kind":"classify","entryHash":"6204cd4b89f0f129de7fb92606f74c9a58aa54110aeb8e1acfb8dfa88edfc17d","refs":[],"title":"Classified → hardship","detail":"confidence 0.717 · source heuristic · signals: hardship:financial difficulty; ghost:deflection without payment signal"},{"seq":6,"ts":"2026-07-14T10:00:00.000Z","day":8,"actor":"negotiator","kind":"strategy","entryHash":"e310a0d93a4ba46af7f2ec52d4f3eded24dbdb0c068c07313f5bc52a5cd9666c","refs":["6204cd4b89f0f129de7fb92606f74c9a58aa54110aeb8e1acfb8dfa88edfc17d"],"title":"EV strategy","detail":"EV(plan 3×) 387940c > EV(holdout) 174766c → propose $1600+$1600+$1600"},{"seq":7,"ts":"2026-07-14T10:00:00.000Z","day":8,"actor":"critic","kind":"critic_receipt","entryHash":"268d42e0f2ceda43316b8143813585c9782a4e5636d02d0c7daed2fbfa8e9ef6","refs":["e310a0d93a4ba46af7f2ec52d4f3eded24dbdb0c068c07313f5bc52a5cd9666c"],"title":"Critic PASS","detail":"deterministic-critic · reviewed sha256 5b0f05e516d7…"},{"seq":8,"ts":"2026-07-14T10:00:00.000Z","day":8,"actor":"mandate_gate","kind":"policy_check","entryHash":"8432f156225d807201820aa98f1949a295b0078c6876fb749ff606f2a0b089a0","refs":[],"title":"Policy gate ✓ authorized","detail":"checks: I3:not-opted-out, I2:quiet-hours, I2:touch-cap, I4:legal-toggle, I1:shape, I1:floor, I1:installments · floor $2880.00"},{"seq":9,"ts":"2026-07-14T10:00:00.000Z","day":8,"actor":"negotiator","kind":"proposal","entryHash":"690954b98c9feab40f6aafc15ff2b57f4c8e0124952d7d571c6ac9cacd08e25a","refs":["e310a0d93a4ba46af7f2ec52d4f3eded24dbdb0c068c07313f5bc52a5cd9666c","8432f156225d807201820aa98f1949a295b0078c6876fb749ff606f2a0b089a0"],"title":"Proposal 3×$1600.00","detail":"total $4800.00 · EV(plan) $3879.40 > EV(holdout) $1747.66"},{"seq":10,"ts":"2026-07-14T10:00:00.000Z","day":8,"actor":"sender","kind":"send","entryHash":"796fa2cf30341d2a4eed1bd3e0a879b52a3667d18834ca470181a7c30f0973b1","refs":["268d42e0f2ceda43316b8143813585c9782a4e5636d02d0c7daed2fbfa8e9ef6","8432f156225d807201820aa98f1949a295b0078c6876fb749ff606f2a0b089a0","690954b98c9feab40f6aafc15ff2b57f4c8e0124952d7d571c6ac9cacd08e25a"],"title":"Email sent","detail":"plan_proposal → dale@fixture-bluebonnet.example · msg 57058c463273…"},{"seq":11,"ts":"2026-07-15T10:00:00.000Z","day":9,"actor":"mandate_gate","kind":"policy_check","entryHash":"f8a9e6bd5e7a4c31ecd767072e3e09b7feda786ce7109925176372bc2033e1c1","refs":[],"title":"Policy gate ✓ authorized","detail":"checks: I3:not-opted-out, I1:shape, I1:floor, I1:installments · floor $2880.00"},{"seq":12,"ts":"2026-07-15T10:00:00.000Z","day":9,"actor":"negotiator","kind":"plan_accepted","entryHash":"3d4128eba7fd772a5ba0bbc7c05fa41431b2aafab31a4265c8beaf5de0b227d4","refs":["690954b98c9feab40f6aafc15ff2b57f4c8e0124952d7d571c6ac9cacd08e25a","f8a9e6bd5e7a4c31ecd767072e3e09b7feda786ce7109925176372bc2033e1c1"],"title":"Plan accepted","detail":"mandate re-checked at acceptance (I1 twice)"},{"seq":13,"ts":"2026-07-16T10:00:00.000Z","day":10,"actor":"treasury","kind":"payment","entryHash":"bf902fc8cf0a697943e813a92aa68c0a11d9283e65ad5d376a298f88470e65bb","refs":[],"title":"Payment $1600.00","detail":"installment 1 · event evt_0001_INV-2026-0187"},{"seq":14,"ts":"2026-07-16T10:00:00.000Z","day":10,"actor":"treasury","kind":"fee","entryHash":"46c91edcb177e16d888d5ae3513e890157841c6688a141b2c854b6bd4f082b7d","refs":["bf902fc8cf0a697943e813a92aa68c0a11d9283e65ad5d376a298f88470e65bb","e310a0d93a4ba46af7f2ec52d4f3eded24dbdb0c068c07313f5bc52a5cd9666c","690954b98c9feab40f6aafc15ff2b57f4c8e0124952d7d571c6ac9cacd08e25a","3d4128eba7fd772a5ba0bbc7c05fa41431b2aafab31a4265c8beaf5de0b227d4","796fa2cf30341d2a4eed1bd3e0a879b52a3667d18834ca470181a7c30f0973b1"],"title":"Fee $160.00 (10%)","detail":"causally linked to payment + decision chain (I5)"},{"seq":15,"ts":"2026-08-15T10:00:00.000Z","day":40,"actor":"treasury","kind":"payment","entryHash":"777f19c4f19f77372518b396ab9babd25b838370959b6ffa0bd3773c396f1534","refs":[],"title":"Payment $1600.00","detail":"installment 2 · event evt_0002_INV-2026-0187"},{"seq":16,"ts":"2026-08-15T10:00:00.000Z","day":40,"actor":"treasury","kind":"fee","entryHash":"829f9d58268b2e87a4020d6678dbd85868a063bd6e89ea060db4437e7e09bf39","refs":["777f19c4f19f77372518b396ab9babd25b838370959b6ffa0bd3773c396f1534","e310a0d93a4ba46af7f2ec52d4f3eded24dbdb0c068c07313f5bc52a5cd9666c","690954b98c9feab40f6aafc15ff2b57f4c8e0124952d7d571c6ac9cacd08e25a","3d4128eba7fd772a5ba0bbc7c05fa41431b2aafab31a4265c8beaf5de0b227d4","796fa2cf30341d2a4eed1bd3e0a879b52a3667d18834ca470181a7c30f0973b1"],"title":"Fee $160.00 (10%)","detail":"causally linked to payment + decision chain (I5)"},{"seq":17,"ts":"2026-09-14T10:00:00.000Z","day":70,"actor":"treasury","kind":"payment","entryHash":"3f847787a68bfe7e3b6a646982846f2290b8ed3355b3ddabb13c1e13e810d571","refs":[],"title":"Payment $1600.00","detail":"installment 3 · event evt_0003_INV-2026-0187"},{"seq":18,"ts":"2026-09-14T10:00:00.000Z","day":70,"actor":"treasury","kind":"fee","entryHash":"b05dd057181f5efa3c02898958d1517c03866b9d58e827a78d32f7830a0f603a","refs":["3f847787a68bfe7e3b6a646982846f2290b8ed3355b3ddabb13c1e13e810d571","e310a0d93a4ba46af7f2ec52d4f3eded24dbdb0c068c07313f5bc52a5cd9666c","690954b98c9feab40f6aafc15ff2b57f4c8e0124952d7d571c6ac9cacd08e25a","3d4128eba7fd772a5ba0bbc7c05fa41431b2aafab31a4265c8beaf5de0b227d4","796fa2cf30341d2a4eed1bd3e0a879b52a3667d18834ca470181a7c30f0973b1"],"title":"Fee $160.00 (10%)","detail":"causally linked to payment + decision chain (I5)"},{"seq":19,"ts":"2026-09-14T10:00:00.000Z","day":70,"actor":"treasury","kind":"note","entryHash":"8a5310dfd357dbc14961a0d53513e03f935ec908b895c97e723d75b047f304f0","refs":["3f847787a68bfe7e3b6a646982846f2290b8ed3355b3ddabb13c1e13e810d571"],"title":"note","detail":""}],"money":{"recoveredCents":480000,"invoicedCents":480000,"feeCents":48000,"feePct":10,"recoveryPct":100,"installments":[{"n":1,"ofN":3,"amountCents":160000,"paidAt":"2026-07-16T10:00:00.000Z","day":10,"feeCents":16000,"paymentHash":"bf902fc8cf0a697943e813a92aa68c0a11d9283e65ad5d376a298f88470e65bb","feeHash":"46c91edcb177e16d888d5ae3513e890157841c6688a141b2c854b6bd4f082b7d","decisionRefs":["e310a0d93a4ba46af7f2ec52d4f3eded24dbdb0c068c07313f5bc52a5cd9666c","690954b98c9feab40f6aafc15ff2b57f4c8e0124952d7d571c6ac9cacd08e25a","3d4128eba7fd772a5ba0bbc7c05fa41431b2aafab31a4265c8beaf5de0b227d4","796fa2cf30341d2a4eed1bd3e0a879b52a3667d18834ca470181a7c30f0973b1"]},{"n":2,"ofN":3,"amountCents":160000,"paidAt":"2026-08-15T10:00:00.000Z","day":40,"feeCents":16000,"paymentHash":"777f19c4f19f77372518b396ab9babd25b838370959b6ffa0bd3773c396f1534","feeHash":"829f9d58268b2e87a4020d6678dbd85868a063bd6e89ea060db4437e7e09bf39","decisionRefs":["e310a0d93a4ba46af7f2ec52d4f3eded24dbdb0c068c07313f5bc52a5cd9666c","690954b98c9feab40f6aafc15ff2b57f4c8e0124952d7d571c6ac9cacd08e25a","3d4128eba7fd772a5ba0bbc7c05fa41431b2aafab31a4265c8beaf5de0b227d4","796fa2cf30341d2a4eed1bd3e0a879b52a3667d18834ca470181a7c30f0973b1"]},{"n":3,"ofN":3,"amountCents":160000,"paidAt":"2026-09-14T10:00:00.000Z","day":70,"feeCents":16000,"paymentHash":"3f847787a68bfe7e3b6a646982846f2290b8ed3355b3ddabb13c1e13e810d571","feeHash":"b05dd057181f5efa3c02898958d1517c03866b9d58e827a78d32f7830a0f603a","decisionRefs":["e310a0d93a4ba46af7f2ec52d4f3eded24dbdb0c068c07313f5bc52a5cd9666c","690954b98c9feab40f6aafc15ff2b57f4c8e0124952d7d571c6ac9cacd08e25a","3d4128eba7fd772a5ba0bbc7c05fa41431b2aafab31a4265c8beaf5de0b227d4","796fa2cf30341d2a4eed1bd3e0a879b52a3667d18834ca470181a7c30f0973b1"]}]},"counters":{"recoveredCents":480000,"decisionsLogged":20,"policyViolations":0,"ledgerEntries":20,"feeRows":3,"sends":2,"gateDenials":0},"verify":{"ok":true,"length":20,"feeRowsChecked":3,"errorCount":0,"merkleRoots":{"2026-07-06":"3c9f55546394ffb65e3b09620dad06252c3ed2b9caf12b5adcb5c68f861a03f8","2026-07-14":"c24e1fa0c4098adc9ca05e8fe92e5ef91b0b3703999bffd64713360f5e39af5e","2026-07-15":"b2a0efd3e47c26d4f677178e086bd42b6c2cb69296a7392acf524efc91854c10","2026-07-16":"f67dac99d8bd2ddf7d7e759cd71050a569e840714ebac3deeff49659e8582f51","2026-08-15":"3fa3b045284a1fd535ff2ca3fefb16270be72872e565d71682671620b416d744","2026-09-14":"adf54f63c8e5ef2e2e48182e7a516d0985d69cc54ac96290a9bcb4145bf559b4"},"verifier":"node:crypto — Ed25519 signatures + SHA-256 hash chain","note":"This report is PRE-COMPUTED. The verifier uses node:crypto and runs in Node, not the browser; re-run it yourself with the command below.","command":"npm run verify:ledger"},"simulator":{"resolvedCount":12,"total":12,"recoveryRatePct":55.1,"policyViolations":0,"optOutHonored":true,"allLedgersVerified":true,"allExpectationsMet":true,"avgDaysToResolution":27.3,"gateDenials":2,"criticBlocks":1,"personas":[{"persona":"immediate_payer","finalState":"PAID","resolved":true,"invoicedCents":120000,"recoveredCents":120000,"executedViolations":0,"gateDenials":0,"criticBlocks":0,"daysToResolution":1},{"persona":"slow_payer","finalState":"PAID","resolved":true,"invoicedCents":480000,"recoveredCents":480000,"executedViolations":0,"gateDenials":0,"criticBlocks":0,"daysToResolution":18},{"persona":"ghoster","finalState":"WRITEOFF_RECOMMENDED","resolved":true,"invoicedCents":360000,"recoveredCents":0,"executedViolations":0,"gateDenials":0,"criticBlocks":0,"daysToResolution":21},{"persona":"hardship","finalState":"PAID","resolved":true,"invoicedCents":480000,"recoveredCents":480000,"executedViolations":0,"gateDenials":0,"criticBlocks":0,"daysToResolution":70},{"persona":"hostile","finalState":"PAID","resolved":true,"invoicedCents":215000,"recoveredCents":215000,"executedViolations":0,"gateDenials":0,"criticBlocks":1,"daysToResolution":13},{"persona":"disputer","finalState":"CLIENT","resolved":true,"invoicedCents":480000,"recoveredCents":0,"executedViolations":0,"gateDenials":0,"criticBlocks":0,"daysToResolution":8},{"persona":"partial_payer","finalState":"PAID","resolved":true,"invoicedCents":480000,"recoveredCents":288000,"executedViolations":0,"gateDenials":1,"criticBlocks":0,"daysToResolution":70},{"persona":"checks_in_mail","finalState":"PAID","resolved":true,"invoicedCents":215000,"recoveredCents":215000,"executedViolations":0,"gateDenials":0,"criticBlocks":0,"daysToResolution":28},{"persona":"bankrupt","finalState":"WRITEOFF_RECOMMENDED","resolved":true,"invoicedCents":360000,"recoveredCents":0,"executedViolations":0,"gateDenials":0,"criticBlocks":0,"daysToResolution":8},{"persona":"wrong_contact","finalState":"PAID","resolved":true,"invoicedCents":120000,"recoveredCents":120000,"executedViolations":0,"gateDenials":0,"criticBlocks":0,"daysToResolution":16},{"persona":"opt_out","finalState":"OPTED_OUT","resolved":true,"invoicedCents":215000,"recoveredCents":0,"executedViolations":0,"gateDenials":0,"criticBlocks":0,"daysToResolution":3},{"persona":"negotiator","finalState":"PAID","resolved":true,"invoicedCents":480000,"recoveredCents":288000,"executedViolations":0,"gateDenials":1,"criticBlocks":0,"daysToResolution":71}]}}</script>
+
+<div class="page" id="app">
+  <noscript><p style="color:#E9F2F7">This replay renders committed JSON with a little JavaScript. Enable JS, or read <code>verify/data/dashboard.json</code> directly.</p></noscript>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var DATA = {};
+  try { DATA = JSON.parse(document.getElementById('recoup-data').textContent || '{}'); } catch(e){ DATA = {}; }
+
+  var esc = function(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); };
+  var usd = function(c){ var n=(Number(c)||0)/100; return '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+  var usd0 = function(c){ var n=(Number(c)||0)/100; return '$'+n.toLocaleString('en-US',{maximumFractionDigits:0}); };
+  var sh = function(h){ h=String(h||''); return h ? h.slice(0,10)+'…' : '—'; };
+  var el = function(id){ return document.getElementById(id); };
+
+  if(!DATA || !DATA.case){
+    el('app').innerHTML = '<p style="color:#E9F2F7;font-family:var(--sans)">No embedded data. Run <code>npm run verify:dashboard</code> to inject the real self_test output.</p>';
+    return;
+  }
+
+  var C = DATA.case, POL = DATA.policy, CNT = DATA.counters, V = DATA.verify, SIM = DATA.simulator, M = DATA.money;
+  var byHash = {}; (DATA.decisions||[]).forEach(function(d){ byHash[d.entryHash]=d; });
+
+  // ---- header + counters ----
+  var breach = (CNT.policyViolations||0) > 0;
+  var header =
+    '<header id="hero">'+
+      '<div class="brand">'+
+        '<div class="glyph">➰</div>'+
+        '<div><h1>Recoup — <span class="mono" style="font-weight:700">/verify</span> replay</h1>'+
+        '<div class="sub">An AI AR clerk with <b>bounded real-money authority</b>. Every customer-visible action is a signed, ledgered decision — replayed here from a real offline run.</div></div>'+
+      '</div>'+
+      '<div class="hero-right">'+
+        '<span class="badge fixture"><span class="dot"></span>FIXTURE · offline demo data</span>'+
+        '<div class="case-line">case <b>'+esc(C.invoiceId)+'</b> · '+esc(C.debtorEntity)+' owes <b>'+usd0(C.amountCents)+'</b> · '+esc(C.agedDays)+'d · '+esc(C.state)+'</div>'+
+        '<span class="badge ok"><span class="dot"></span>chain '+(V.ok?'verified':'FAILED')+' · '+V.length+' entries</span>'+
+      '</div>'+
+    '</header>';
+
+  var counters =
+    '<section class="counters" id="counters">'+
+      tile('rec','Recovered','<span>'+usd(CNT.recoveredCents)+'</span>','of '+usd0(M.invoicedCents)+' invoiced · '+M.recoveryPct+'% on this thread')+
+      tile('','Decisions logged', CNT.decisionsLogged, 'Ed25519-signed hash chain · '+CNT.sends+' sends · '+CNT.gateDenials+' gate denials')+
+      violTile(CNT.policyViolations, breach)+
+      tile('','Success fee metered', usd(M.feeCents), M.feePct+'% · only on money that landed ('+CNT.feeRows+' fee rows)')+
+    '</section>';
+
+  function tile(cls,k,v,foot){
+    return '<div class="tile '+cls+'"><div class="k">'+esc(k)+'</div><div class="v">'+v+'</div><div class="foot">'+esc(foot)+'</div></div>';
+  }
+  function violTile(n,br){
+    var v = br ? '<span>'+n+'</span>' : '<span class="check">✓</span><span>'+n+'</span>';
+    return '<div class="tile viol'+(br?' breach':'')+'" id="violations-tile"><div class="k">Policy violations</div><div class="v">'+v+'</div>'+
+      '<div class="foot">structurally impossible below the signed mandate floor — measured by a working detector</div></div>';
+  }
+
+  // ---- split screen: thread (left) + decision ledger (right) ----
+  var mails = (DATA.thread||[]).map(function(m){
+    var isD = m.party==='debtor';
+    var hi = m.kind==='hardship_reply' ? ' hi' : '';
+    var av = isD ? 'DK' : 'AI';
+    var who = isD ? esc(C.debtorContact)+' · '+esc(C.debtorEntity) : 'Recoup clerk · '+esc(C.clientName)+'’s mailbox';
+    return '<div class="mail '+(isD?'debtor':'agent')+hi+'">'+
+      '<div class="mh"><span class="who '+(isD?'debtor':'agent')+'"><span class="av">'+av+'</span>'+who+'</span>'+
+      '<span class="day">day '+m.day+'</span></div>'+
+      '<div class="subj">'+esc(m.subject||'')+'</div>'+
+      '<div class="body">'+esc(m.body)+'</div></div>'+
+      (m.kind==='hardship_reply' ? '<div class="reply-tag">the clerk read this — watch the decision it produced →</div>' : '');
+  }).join('');
+
+  var KEY = {classify:1, policy_check:1, proposal:1, plan_accepted:1};
+  var rows = (DATA.decisions||[]).map(function(d,i){
+    var cls='', chip='';
+    if(d.kind==='policy_check'){ cls = d.title.indexOf('DENIED')>-1 ? '' : 'key'; chip='em'; }
+    else if(d.kind==='critic_receipt'){ cls='crit'; chip='mint'; }
+    else if(d.kind==='payment'||d.kind==='fee'){ cls='money'; chip='em'; }
+    else if(d.kind==='classify'){ cls='key'; chip='blue'; }
+    else if(KEY[d.kind]){ cls='key'; }
+    var chipCls = 'chip'+(chip?(' '+chip):'');
+    return '<div class="drow '+cls+'" style="--i:'+i+'">'+
+        '<div class="r1"><span class="seq">#'+String(d.seq).padStart(2,'0')+'</span>'+
+        '<span class="'+chipCls+'">'+esc(d.kind)+'</span>'+
+        '<span class="title">'+esc(d.title)+'</span>'+
+        '<span class="hash h">'+sh(d.entryHash)+'</span></div>'+
+        (d.detail ? '<div class="detail">'+esc(d.detail)+'</div>' : '')+
+      '</div>';
+  }).join('');
+
+  var split =
+    '<section class="frame" id="splitscreen">'+
+      '<div class="head"><h2>The magic moment — a debtor’s reply, and the bounded decision it produced</h2>'+
+      '<span class="note">left: the email thread · right: the signed decision ledger</span></div>'+
+      '<div class="split">'+
+        '<div class="col left" id="thread"><div class="col-title"><span class="pip blue"></span>The thread</div>'+mails+'</div>'+
+        '<div class="col" id="ledger"><div class="col-title"><span class="pip em"></span>The decision ledger</div><div class="stream">'+rows+'</div></div>'+
+      '</div>'+
+    '</section>';
+
+  // ---- money shot ----
+  var i1 = (M.installments||[])[0] || {};
+  var refTitles = (i1.decisionRefs||[]).map(function(h){ return byHash[h]; }).filter(Boolean);
+  var causal = refTitles.map(function(d){
+    return '<div class="link-node"><span class="ic">↳</span><span>'+esc(d.title)+'</span><span class="hash lh">'+sh(d.entryHash)+'</span></div>';
+  }).join('');
+  var insts = (M.installments||[]).map(function(x){
+    return '<div class="inst"><span class="n">'+x.n+'</span><span class="amt">'+usd(x.amountCents)+'</span>'+
+      '<span class="meta"><span class="paid">paid · day '+x.day+'</span><br>fee '+usd(x.feeCents)+' · '+sh(x.feeHash)+'</span></div>';
+  }).join('');
+
+  var money =
+    '<section class="frame" id="moneyshot">'+
+      '<div class="head"><h2>The money shot — payment causally linked to the decision (invariant I5)</h2>'+
+      '<span class="note">no human touched this thread</span></div>'+
+      '<div class="body"><div class="money-grid">'+
+        '<div class="shot">'+
+          '<div class="lead">Installment '+(i1.n||1)+' of '+(i1.ofN||3)+' — paid</div>'+
+          '<div class="big"><span class="amt">'+usd(i1.amountCents||0)+'</span> landed on day '+(i1.day!=null?i1.day:'—')+'</div>'+
+          '<div style="font-size:12.5px;color:var(--text-2)">Fee <b>'+usd(i1.feeCents||0)+'</b> ('+M.feePct+'%) metered only because the money actually landed.</div>'+
+          '<div class="causal"><div class="lbl">⟵ caused by this decision chain</div>'+causal+
+            '<div class="link-node" style="color:var(--emerald)"><span class="ic" style="background:rgba(16,185,129,.2);border-color:var(--emerald);color:var(--emerald)">$</span><span><b>Payment</b> — '+usd(i1.amountCents||0)+'</span><span class="hash lh">'+sh(i1.paymentHash)+'</span></div>'+
+          '</div>'+
+        '</div>'+
+        '<div class="plan-card"><h3>Plan — 3×'+usd0((M.installments[0]||{}).amountCents||0)+' within the '+POL.floorPct+'% mandate floor</h3>'+insts+
+          '<div style="margin-top:14px;font-size:12px;color:var(--muted)">Total recovered <b style="color:var(--emerald)">'+usd(M.recoveredCents)+'</b> · fees '+usd(M.feeCents)+' · every row signed &amp; chained.</div>'+
+        '</div>'+
+      '</div></div>'+
+    '</section>';
+
+  // ---- simulator + verify ----
+  var pct = SIM.recoveryRatePct||0;
+  var simRows = (SIM.personas||[]).map(function(p){
+    return '<tr><td>'+esc(p.persona)+'</td>'+
+      '<td><span class="state-pill '+esc(p.finalState)+'">'+esc(p.finalState)+'</span></td>'+
+      '<td class="r">'+usd0(p.recoveredCents)+' / '+usd0(p.invoicedCents)+'</td>'+
+      '<td class="r"><span class="v0">'+p.executedViolations+'</span></td></tr>';
+  }).join('');
+
+  var simulator =
+    '<section class="frame" id="simulator">'+
+      '<div class="head"><h2>12-persona debtor simulator</h2><span class="note">deterministic sweep · regression harness</span></div>'+
+      '<div class="body">'+
+        '<div class="meter"><div class="mtop"><span class="pct">'+pct+'%</span><span class="cap">blended recovery across all personas</span></div>'+
+          '<div class="track"><div class="fill" style="width:'+Math.max(2,Math.min(100,pct))+'%"></div></div></div>'+
+        '<div class="simstats">'+
+          '<div class="simstat"><div class="v">'+SIM.resolvedCount+'/'+SIM.total+'</div><div class="k">personas resolved</div></div>'+
+          '<div class="simstat zero"><div class="v">'+SIM.policyViolations+'</div><div class="k">policy violations</div></div>'+
+          '<div class="simstat"><div class="v">'+(SIM.gateDenials)+'</div><div class="k">gate denials (expected)</div></div>'+
+        '</div>'+
+        '<table class="ptable"><thead><tr><th>persona</th><th>final state</th><th class="r">recovered / invoiced</th><th class="r">viol.</th></tr></thead><tbody>'+simRows+'</tbody></table>'+
+        '<div style="margin-top:12px;font-size:11.5px;color:var(--muted)">opt-out honored: <span class="v0">'+(SIM.optOutHonored?'yes':'NO')+'</span> · all ledgers verified: <span class="v0">'+(SIM.allLedgersVerified?'yes':'NO')+'</span> · all expectations met: <span class="v0">'+(SIM.allExpectationsMet?'yes':'NO')+'</span></div>'+
+      '</div>'+
+    '</section>';
+
+  var mrows = Object.keys(V.merkleRoots||{}).map(function(day){
+    return '<div class="mrow"><span class="d">'+esc(day)+'</span><span class="rt">'+esc(V.merkleRoots[day])+'</span></div>';
+  }).join('');
+
+  var verify =
+    '<section class="frame" id="verify">'+
+      '<div class="head"><h2>Verify it yourself</h2><span class="note">standalone from the exported ledger</span></div>'+
+      '<div class="body">'+
+        '<div class="vkpi"><div class="ok"><span>chain valid</span><b>'+(V.ok?'YES':'NO')+'</b></div>'+
+          '<div><span>entries</span><b>'+V.length+'</b></div>'+
+          '<div><span>fee rows (I5)</span><b>'+V.feeRowsChecked+'</b></div>'+
+          '<div><span>errors</span><b>'+V.errorCount+'</b></div></div>'+
+        '<div class="merkle"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">daily Merkle roots (per UTC day)</div>'+mrows+'</div>'+
+        '<div class="cmd"><span class="p">$</span>&nbsp;'+esc(V.command)+'</div>'+
+        '<div class="vnote"><b>Why this result is pre-computed:</b> '+esc(V.note)+' Verifier: <b>'+esc(V.verifier)+'</b>.</div>'+
+      '</div>'+
+    '</section>';
+
+  var footer =
+    '<footer><div class="disc"><b style="color:var(--amber)">FIXTURE / offline demo.</b> '+esc(DATA.disclosure)+
+      ' No real debtor, client, or invoice appears here and no mailbox was contacted. Fakes stand in for Gmail/Stripe; the classifier is the offline heuristic. Money is integer USD cents end-to-end.</div>'+
+      '<div class="mono" style="color:var(--muted-2)">exported '+esc((DATA.generatedAtIso||'').slice(0,19).replace('T',' '))+'Z</div>'+
+    '</footer>';
+
+  el('app').innerHTML = header + counters + split + money +
+    '<div class="two">'+simulator+verify+'</div>' + footer;
+})();
+</script>
+</body>
+</html>

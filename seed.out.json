@@ -1,0 +1,467 @@
+{
+  "version": "0.1.0",
+  "synthetic": true,
+  "policy": {
+    "floorPct": 60,
+    "maxInstallments": 3,
+    "quietHours": {
+      "startHour": 21,
+      "endHour": 8
+    },
+    "maxTouchesPerWeek": 5,
+    "legalLanguage": false
+  },
+  "invoices": {
+    "austin_designer": {
+      "id": "INV-2026-0187",
+      "client": {
+        "name": "Mara Voss Design",
+        "email": "mara@fixture-voss.design"
+      },
+      "debtor": {
+        "entity": "Bluebonnet Media LLC",
+        "contact": "Dale Kirby",
+        "email": "dale@fixture-bluebonnet.example"
+      },
+      "amountCents": 480000,
+      "issuedAt": "2026-04-10T00:00:00.000Z",
+      "agedDays": 87,
+      "state": "CA",
+      "kind": "b2b",
+      "synthetic": true
+    },
+    "hostile_harry": {
+      "id": "INV-2026-0212",
+      "client": {
+        "name": "Mara Voss Design",
+        "email": "mara@fixture-voss.design"
+      },
+      "debtor": {
+        "entity": "Harry & Sons Renovations",
+        "contact": "Harry Stroud",
+        "email": "harry@fixture-stroud.example"
+      },
+      "amountCents": 215000,
+      "issuedAt": "2026-05-03T00:00:00.000Z",
+      "agedDays": 62,
+      "state": "TX",
+      "kind": "b2b",
+      "synthetic": true
+    },
+    "ghost_llc": {
+      "id": "INV-2026-0154",
+      "client": {
+        "name": "Mara Voss Design",
+        "email": "mara@fixture-voss.design"
+      },
+      "debtor": {
+        "entity": "Vantablack Ventures LLC",
+        "contact": "AP Department",
+        "email": "ap@fixture-vantablack.example"
+      },
+      "amountCents": 360000,
+      "issuedAt": "2026-03-08T00:00:00.000Z",
+      "agedDays": 120,
+      "state": "NY",
+      "kind": "b2b",
+      "synthetic": true
+    },
+    "quick_win": {
+      "id": "INV-2026-0243",
+      "client": {
+        "name": "Mara Voss Design",
+        "email": "mara@fixture-voss.design"
+      },
+      "debtor": {
+        "entity": "Copper Kettle Coffee Co.",
+        "contact": "June Park",
+        "email": "june@fixture-copperkettle.example"
+      },
+      "amountCents": 120000,
+      "issuedAt": "2026-06-06T00:00:00.000Z",
+      "agedDays": 30,
+      "state": "CA",
+      "kind": "b2b",
+      "synthetic": true
+    }
+  },
+  "rulepacks": {
+    "CA": {
+      "state": "CA",
+      "version": "2026.07-fixture",
+      "citation": "Cal. Civ. Code §3289(b) [FIXTURE]",
+      "annualRatePct": 10,
+      "graceDays": 0,
+      "source": "FIXTURE"
+    },
+    "TX": {
+      "state": "TX",
+      "version": "2026.07-fixture",
+      "citation": "Tex. Prop. Code ch. 28 (prompt payment) [FIXTURE]",
+      "annualRatePct": 18,
+      "graceDays": 30,
+      "source": "FIXTURE"
+    },
+    "NY": {
+      "state": "NY",
+      "version": "2026.07-fixture",
+      "citation": "N.Y. C.P.L.R. §5004 [FIXTURE]",
+      "annualRatePct": 9,
+      "graceDays": 0,
+      "source": "FIXTURE"
+    }
+  },
+  "replies": {
+    "hardship_ambiguous": "Hey — appreciate the work, honestly things are tight this quarter, maybe later? We want to make this right but cash flow is rough right now.",
+    "acceptance": "Agreed — that works for us. Send over the schedule.",
+    "hostile": "Stop harassing me about this. Your emails are an absolute joke and my lawyer will hear about it if this continues.",
+    "dispute": "We dispute this invoice — the final deliverables were never approved by our team.",
+    "opt_out": "Please stop emailing me. Do not contact us again about this.",
+    "bankrupt": "The company filed for chapter 7 bankruptcy last month. All creditor claims go through the trustee.",
+    "wrong_contact": "I left the company last year, so I'm the wrong person for this — reach out to our billing team at ap@fixture-newco.example.",
+    "partial_offer": "Look, we can pay half now and that's honestly the best we can do. 50% and we call it even?",
+    "negotiator_opener": "Cash is tight this season — could we do 5 monthly payments instead of one lump sum?",
+    "negotiator_lowball": "What if we settle for 40% as a lump sum? Would you take that?",
+    "promise": "The check is in the mail — should arrive by next week, I'm told.",
+    "ghosty": "Super busy right now — let me check with the team and I'll circle back.",
+    "paying": "Apologies for the delay — I'm paying it now through the link, should be done today."
+  },
+  "personas": [
+    {
+      "name": "immediate_payer",
+      "description": "Pays the full balance on the first touch.",
+      "invoiceId": "INV-2026-0243",
+      "steps": [
+        {
+          "day": 1,
+          "kind": "pay_full"
+        }
+      ],
+      "expected": {
+        "finalState": "PAID",
+        "recoveredCents": 120000
+      }
+    },
+    {
+      "name": "slow_payer",
+      "description": "Needs the full ladder; pays after touch 3.",
+      "invoiceId": "INV-2026-0187",
+      "steps": [
+        {
+          "day": 7,
+          "kind": "silence"
+        },
+        {
+          "day": 14,
+          "kind": "silence"
+        },
+        {
+          "day": 18,
+          "kind": "pay_full"
+        }
+      ],
+      "expected": {
+        "finalState": "PAID",
+        "recoveredCents": 480000
+      }
+    },
+    {
+      "name": "ghoster",
+      "description": "Never replies; ladder exhausts into a reasoned write-off memo.",
+      "invoiceId": "INV-2026-0154",
+      "steps": [
+        {
+          "day": 7,
+          "kind": "silence"
+        },
+        {
+          "day": 14,
+          "kind": "silence"
+        },
+        {
+          "day": 21,
+          "kind": "silence"
+        }
+      ],
+      "expected": {
+        "finalState": "WRITEOFF_RECOMMENDED",
+        "recoveredCents": 0
+      }
+    },
+    {
+      "name": "hardship",
+      "description": "The austin_designer demo path: ambiguous hardship → 3×$1,600 plan → paid.",
+      "invoiceId": "INV-2026-0187",
+      "steps": [
+        {
+          "day": 7,
+          "kind": "silence"
+        },
+        {
+          "day": 8,
+          "kind": "reply",
+          "text": "Hey — appreciate the work, honestly things are tight this quarter, maybe later? We want to make this right but cash flow is rough right now."
+        },
+        {
+          "day": 9,
+          "kind": "reply",
+          "text": "Agreed — that works for us. Send over the schedule."
+        },
+        {
+          "day": 10,
+          "kind": "pay_installment",
+          "index": 0
+        },
+        {
+          "day": 40,
+          "kind": "pay_installment",
+          "index": 1
+        },
+        {
+          "day": 70,
+          "kind": "pay_installment",
+          "index": 2
+        }
+      ],
+      "expected": {
+        "finalState": "PAID",
+        "recoveredCents": 480000
+      }
+    },
+    {
+      "name": "hostile",
+      "description": "hostile_harry beat: sharp draft blocked by critic, de-escalation sent, then pays.",
+      "invoiceId": "INV-2026-0212",
+      "steps": [
+        {
+          "day": 7,
+          "kind": "silence"
+        },
+        {
+          "day": 8,
+          "kind": "reply",
+          "text": "Stop harassing me about this. Your emails are an absolute joke and my lawyer will hear about it if this continues."
+        },
+        {
+          "day": 12,
+          "kind": "reply",
+          "text": "Fine. Point made — I'm paying it now through your link."
+        },
+        {
+          "day": 13,
+          "kind": "pay_full"
+        }
+      ],
+      "expected": {
+        "finalState": "PAID",
+        "recoveredCents": 215000
+      }
+    },
+    {
+      "name": "disputer",
+      "description": "Contests the debt; agent flags and hands off to the human client.",
+      "invoiceId": "INV-2026-0187",
+      "steps": [
+        {
+          "day": 7,
+          "kind": "silence"
+        },
+        {
+          "day": 8,
+          "kind": "reply",
+          "text": "We dispute this invoice — the final deliverables were never approved by our team."
+        }
+      ],
+      "expected": {
+        "finalState": "CLIENT",
+        "recoveredCents": 0
+      }
+    },
+    {
+      "name": "partial_payer",
+      "description": "Offers 50%; gate refuses below-floor accept; settles at the 60% floor in 3 parts.",
+      "invoiceId": "INV-2026-0187",
+      "steps": [
+        {
+          "day": 7,
+          "kind": "silence"
+        },
+        {
+          "day": 8,
+          "kind": "reply",
+          "text": "Look, we can pay half now and that's honestly the best we can do. 50% and we call it even?"
+        },
+        {
+          "day": 9,
+          "kind": "reply",
+          "text": "Deal. Works for us."
+        },
+        {
+          "day": 10,
+          "kind": "pay_installment",
+          "index": 0
+        },
+        {
+          "day": 40,
+          "kind": "pay_installment",
+          "index": 1
+        },
+        {
+          "day": 70,
+          "kind": "pay_installment",
+          "index": 2
+        }
+      ],
+      "expected": {
+        "finalState": "PAID",
+        "recoveredCents": 288000
+      }
+    },
+    {
+      "name": "checks_in_mail",
+      "description": "Serial promiser; two unverified promises before the money actually lands.",
+      "invoiceId": "INV-2026-0212",
+      "steps": [
+        {
+          "day": 7,
+          "kind": "silence"
+        },
+        {
+          "day": 8,
+          "kind": "reply",
+          "text": "The check is in the mail — should arrive by next week, I'm told."
+        },
+        {
+          "day": 16,
+          "kind": "reply",
+          "text": "It must have gotten lost — I'll resend next week, promise."
+        },
+        {
+          "day": 28,
+          "kind": "pay_full"
+        }
+      ],
+      "expected": {
+        "finalState": "PAID",
+        "recoveredCents": 215000
+      }
+    },
+    {
+      "name": "bankrupt",
+      "description": "Declares chapter 7; agent recommends write-off instead of wasting effort.",
+      "invoiceId": "INV-2026-0154",
+      "steps": [
+        {
+          "day": 7,
+          "kind": "silence"
+        },
+        {
+          "day": 8,
+          "kind": "reply",
+          "text": "The company filed for chapter 7 bankruptcy last month. All creditor claims go through the trustee."
+        }
+      ],
+      "expected": {
+        "finalState": "WRITEOFF_RECOMMENDED",
+        "recoveredCents": 0
+      }
+    },
+    {
+      "name": "wrong_contact",
+      "description": "Redirects to AP; cadence restarts at the corrected address, then pays.",
+      "invoiceId": "INV-2026-0243",
+      "steps": [
+        {
+          "day": 7,
+          "kind": "silence"
+        },
+        {
+          "day": 8,
+          "kind": "reply",
+          "text": "I left the company last year, so I'm the wrong person for this — reach out to our billing team at ap@fixture-newco.example."
+        },
+        {
+          "day": 15,
+          "kind": "silence"
+        },
+        {
+          "day": 16,
+          "kind": "pay_full"
+        }
+      ],
+      "expected": {
+        "finalState": "PAID",
+        "recoveredCents": 120000
+      }
+    },
+    {
+      "name": "opt_out",
+      "description": "Demands contact stop; I3 halts everything within one tick, permanently.",
+      "invoiceId": "INV-2026-0212",
+      "steps": [
+        {
+          "day": 3,
+          "kind": "reply",
+          "text": "Please stop emailing me. Do not contact us again about this."
+        },
+        {
+          "day": 7,
+          "kind": "silence"
+        },
+        {
+          "day": 14,
+          "kind": "silence"
+        }
+      ],
+      "expected": {
+        "finalState": "OPTED_OUT",
+        "recoveredCents": 0
+      }
+    },
+    {
+      "name": "negotiator",
+      "description": "Asks for 5 installments (clamped to 3), lowballs 40% (refused), settles at floor.",
+      "invoiceId": "INV-2026-0187",
+      "steps": [
+        {
+          "day": 7,
+          "kind": "silence"
+        },
+        {
+          "day": 8,
+          "kind": "reply",
+          "text": "Cash is tight this season — could we do 5 monthly payments instead of one lump sum?"
+        },
+        {
+          "day": 9,
+          "kind": "reply",
+          "text": "What if we settle for 40% as a lump sum? Would you take that?"
+        },
+        {
+          "day": 10,
+          "kind": "reply",
+          "text": "Agreed — that works for us. Send over the schedule."
+        },
+        {
+          "day": 11,
+          "kind": "pay_installment",
+          "index": 0
+        },
+        {
+          "day": 41,
+          "kind": "pay_installment",
+          "index": 1
+        },
+        {
+          "day": 71,
+          "kind": "pay_installment",
+          "index": 2
+        }
+      ],
+      "expected": {
+        "finalState": "PAID",
+        "recoveredCents": 288000
+      }
+    }
+  ]
+}

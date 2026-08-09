@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+out/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+/test-results/
+
+# Env & secrets — never commit GEMINI_API_KEY or any real key
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Editor / OS
+.DS_Store
+*.swp
+.idea/
+.vscode/

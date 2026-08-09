@@ -1,0 +1,40 @@
+{
+  "name": "@recoup/dunningkit-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Recoup offline-testable core: escalation state machine, settlement-mandate middleware, signed decision ledger, intent classifier, negotiation engine, compliance critic, actuator fakes, debtor simulator.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "dunningkit": "./src/cli.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "seed": "tsx scripts/seed.ts",
+    "seed:check": "tsx scripts/seed.ts --check",
+    "self-test": "tsx scripts/self_test.ts",
+    "verify-ledger": "tsx scripts/verify_ledger.ts",
+    "verify:ledger": "tsx scripts/verify_ledger.ts",
+    "bench": "tsx scripts/bench.ts",
+    "dunningkit": "tsx src/cli.ts",
+    "verify:dashboard": "npm run self-test && tsx scripts/build_dashboard.ts",
+    "evidence": "tsx scripts/capture_evidence.ts",
+    "proof": "npm run seed:check && npm run self-test && npm run verify-ledger",
+    "audit": "npm audit --audit-level=high",
+    "ci": "npm run typecheck && npm run test && npm run proof"
+  },
+  "dependencies": {
+    "@google/genai": "^1.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "playwright": "^1.59.1",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.1.0"
+  }
+}
