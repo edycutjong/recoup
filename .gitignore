@@ -23,3 +23,6 @@ coverage/
 *.swp
 .idea/
 .vscode/
+
+# graphify knowledge graph (kitchen — never judge-facing)
+graphify-out/
