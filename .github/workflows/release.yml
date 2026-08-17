@@ -34,8 +34,26 @@ jobs:
       contents: write # create tags + GitHub Releases, push the release branch
       pull-requests: write # open/update the release PR
     steps:
-      - name: Run release-please
-        id: release
+      # The GitHub REST/GraphQL API returns transient 503s often enough that an
+      # unretried single attempt is a coin flip. release-please is idempotent —
+      # it reconciles state from the tags and the open release PR — so simply
+      # running it again is safe.
+      - name: Run release-please (attempt 1)
+        id: attempt1
+        continue-on-error: true
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Back off before retrying
+        if: steps.attempt1.outcome == 'failure'
+        run: sleep 45
+
+      - name: Run release-please (attempt 2)
+        id: attempt2
+        if: steps.attempt1.outcome == 'failure'
         uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -44,9 +62,9 @@ jobs:
 
       - name: Summarise outcome
         env:
-          RELEASED: ${{ steps.release.outputs.release_created }}
-          TAG: ${{ steps.release.outputs.tag_name }}
-          PR: ${{ steps.release.outputs.pr }}
+          RELEASED: ${{ steps.attempt1.outputs.release_created || steps.attempt2.outputs.release_created }}
+          TAG: ${{ steps.attempt1.outputs.tag_name || steps.attempt2.outputs.tag_name }}
+          PR: ${{ steps.attempt1.outputs.pr || steps.attempt2.outputs.pr }}
         run: |
           {
             echo "### release-please"

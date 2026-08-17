@@ -200,30 +200,29 @@ jobs:
             return 0
           }
 
-          # 1) Vercel sometimes moves the alias on its own. Give it a short grace
-          #    period before intervening.
-          aliased=0
-          for i in 1 2 3 4 5 6; do
-            echo "check ${i}/6 — is ${PROD_DOMAIN} already on the new build?"
-            if live_matches "pre${i}"; then aliased=1; break; fi
-            sleep 5
+          # 1) Move the alias explicitly. This runs UNCONDITIONALLY and is
+          #    idempotent. Deciding whether to alias by comparing live bytes
+          #    would be wrong: verify/ often deploys unchanged, so the old
+          #    deployment serves byte-identical HTML and the check would pass
+          #    while the domain still points at a stale deployment — precisely
+          #    the state that later produced DEPLOYMENT_NOT_FOUND when that
+          #    deployment went away.
+          #    `vercel alias set` exiting 0 is the authoritative confirmation
+          #    that the domain now resolves to this deployment (`vercel inspect`
+          #    is not — it lists a deployment's historical aliases, so a stale
+          #    deployment still shows the production domain).
+          echo "assigning ${PROD_DOMAIN} -> ${DEPLOY_URL}"
+          for attempt in 1 2 3; do
+            if vercel alias set "$DEPLOY_URL" "$PROD_DOMAIN" \
+                 --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"; then
+              break
+            fi
+            echo "alias attempt ${attempt} failed"
+            [ "$attempt" -lt 3 ] || { echo "::error::vercel alias set failed 3x"; exit 1; }
+            sleep 10
           done
 
-          # 2) It usually is not. Move the alias explicitly — the known gotcha.
-          if [ "$aliased" -ne 1 ]; then
-            echo "alias did not move on its own — running: vercel alias set"
-            for attempt in 1 2 3; do
-              if vercel alias set "$DEPLOY_URL" "$PROD_DOMAIN" \
-                   --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"; then
-                break
-              fi
-              echo "alias attempt ${attempt} failed; retrying"
-              sleep 10
-              [ "$attempt" -lt 3 ] || { echo "::error::vercel alias set failed 3x"; exit 1; }
-            done
-          fi
-
-          # 3) Hard gate. The live judged artifact must serve THIS build.
+          # 2) Hard gate. The live judged artifact must serve THIS build.
           for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
             echo "post-alias check ${i}/12"
             if live_matches "post${i}"; then
