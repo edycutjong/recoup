@@ -1,0 +1,60 @@
+name: Release
+
+# Automated semantic versioning driven by Conventional Commits.
+#
+# release-please maintains a rolling "chore(main): release X.Y.Z" pull request
+# that accumulates every conventional commit landed on main. Merging that PR is
+# the release: release-please then tags vX.Y.Z, cuts the GitHub Release, and
+# writes CHANGELOG.md. Nothing is published to npm — the package is private and
+# the release artifact judges care about is the tagged source + changelog.
+#
+# Baseline is pinned at 1.0.0 in .release-please-manifest.json (matching the
+# already-shipped package.json version), so the first automated release will be
+# 1.0.1 (fix) or 1.1.0 (feat) rather than restarting the version line.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two release-please passes concurrently — they would race on the
+# release PR branch. Queue instead of cancelling so no commit is skipped.
+concurrency:
+  group: release-please-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: release-please
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create tags + GitHub Releases, push the release branch
+      pull-requests: write # open/update the release PR
+    steps:
+      - name: Run release-please
+        id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Summarise outcome
+        env:
+          RELEASED: ${{ steps.release.outputs.release_created }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+          PR: ${{ steps.release.outputs.pr }}
+        run: |
+          {
+            echo "### release-please"
+            if [ "${RELEASED:-false}" = "true" ]; then
+              echo "Released **${TAG}**."
+            elif [ -n "${PR:-}" ]; then
+              echo "Release pull request opened/updated. Merge it to cut the release."
+            else
+              echo "No releasable conventional commits since the last release."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
