@@ -1,0 +1,48 @@
+name: Gitleaks
+
+# Full-history secret scan.
+#
+# This is deliberately NOT the same thing as the TruffleHog step in ci.yml:
+# that one runs with `--only-verified`, so it only reports credentials it can
+# live-verify against a provider API. Project-shaped keys (Ed25519 ledger
+# signing keys, Stripe-style test tokens, GEMINI_API_KEY values, generic
+# high-entropy assignments) are unverifiable by definition and slip straight
+# through it. Gitleaks is pattern + entropy based and catches those.
+#
+# fetch-depth: 0 is load-bearing — a shallow clone would only scan the tip
+# commit, and the whole point is finding a key that was committed once and
+# "removed" in a later commit while staying in history forever.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 5 * * 1" # weekly, Mondays 05:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitleaks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Full-history secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Free for public repositories; no GITLEAKS_LICENSE required here.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "true"
+          GITLEAKS_ENABLE_SUMMARY: "true"
