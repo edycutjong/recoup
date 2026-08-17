@@ -54,6 +54,22 @@ jobs:
       - name: Run release-please (attempt 2)
         id: attempt2
         if: steps.attempt1.outcome == 'failure'
+        continue-on-error: true
+        uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Back off before the final attempt
+        if: steps.attempt2.outcome == 'failure'
+        run: sleep 120
+
+      # Final attempt — not continue-on-error, so three consecutive API
+      # failures still turn the job red rather than silently doing nothing.
+      - name: Run release-please (attempt 3)
+        id: attempt3
+        if: steps.attempt2.outcome == 'failure'
         uses: googleapis/release-please-action@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -62,9 +78,9 @@ jobs:
 
       - name: Summarise outcome
         env:
-          RELEASED: ${{ steps.attempt1.outputs.release_created || steps.attempt2.outputs.release_created }}
-          TAG: ${{ steps.attempt1.outputs.tag_name || steps.attempt2.outputs.tag_name }}
-          PR: ${{ steps.attempt1.outputs.pr || steps.attempt2.outputs.pr }}
+          RELEASED: ${{ steps.attempt1.outputs.release_created || steps.attempt2.outputs.release_created || steps.attempt3.outputs.release_created }}
+          TAG: ${{ steps.attempt1.outputs.tag_name || steps.attempt2.outputs.tag_name || steps.attempt3.outputs.tag_name }}
+          PR: ${{ steps.attempt1.outputs.pr || steps.attempt2.outputs.pr || steps.attempt3.outputs.pr }}
         run: |
           {
             echo "### release-please"
