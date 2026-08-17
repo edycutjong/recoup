@@ -12,7 +12,7 @@
 
 ![TypeScript](https://img.shields.io/badge/TypeScript_5-strict-3178C6?style=flat&logo=typescript&logoColor=white)
 ![Node](https://img.shields.io/badge/Node-%E2%89%A518-339933?style=flat&logo=node.js&logoColor=white)
-![Vitest](https://img.shields.io/badge/Vitest-2.x-6E9F18?style=flat&logo=vitest&logoColor=white)
+![Vitest](https://img.shields.io/badge/Vitest-3.x-6E9F18?style=flat&logo=vitest&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-0F2A43?style=flat)
 ![XPRIZE](https://img.shields.io/badge/XPRIZE-Category_3_·_Small_Business-8b5cf6?style=flat)
 
@@ -27,8 +27,7 @@ This package is the **deterministic, fully-offline core**: the escalation state 
 the settlement-mandate middleware (the economic primitive), the signed decision ledger,
 the intent classifier, the negotiation engine, the compliance critic, the actuator seams
 (in-memory fakes), and a 12-persona debtor simulator. **No network, no real keys, no live
-money** — everything here runs and is proven under `vitest`. `COMPLEXITY.md` (in the parent
-spec folder) is the binding blueprint.
+money** — everything here runs and is proven under `vitest`.
 
 ---
 
@@ -60,7 +59,7 @@ open verify/index.html     # the /verify replay: thread ↔ decision ledger, mon
 npx tsx src/cli.ts --help                                        # the unified `dunningkit` CLI
 npx tsx src/cli.ts simulate --persona hardship --floor 60        # one persona through the machine
 npx tsx src/cli.ts interest --state CA --days 87 --amount 4800   # statutory late-interest
-npx tsx src/cli.ts verify verify/data/ledger.jsonl              # standalone chain/Merkle/I5 verify
+npx tsx src/cli.ts verify verify/data/ledger.jsonl               # standalone chain/Merkle/I5 verify
 
 npm run evidence           # capture ≥15 live-execution PNGs → docs/evidence/
 ```
@@ -82,8 +81,8 @@ SELF-TEST: PASS
 > and **17 live-execution evidence screenshots** are now built — they render/report the *real*
 > output of a deterministic `self_test` run (see "See it in action" below). What is **still not
 > live**: real Gmail OAuth send, live Stripe money, real revenue, and Gemini inference — those
-> live-plane pieces stay designed behind seams and scheduled in `BUILD_PLAN.md` (Weeks 1–6). The
-> dashboard renders committed **FIXTURE** data and says so on the page.
+> live-plane pieces stay designed behind seams (see "Status — Implemented / Stubbed /
+> Not-started" below). The dashboard renders committed **FIXTURE** data and says so on the page.
 
 ---
 
@@ -170,12 +169,12 @@ intentionally N/A):
 | Security (SCA) | Dependabot (npm + actions) + `npm audit` | ✅ advisory¹ |
 | E2E / Performance / Lighthouse | — | N/A — no UI yet |
 
-¹ `npm audit` runs advisory in CI: the currently-flagged items live entirely in the
-`vitest`/`vite` **devDependency** chain (test-only, never shipped). The library's single
-runtime dependency is `@google/genai`, lazy-loaded and only constructed when
-`GEMINI_API_KEY` is set.
+¹ `npm audit` runs advisory in CI and is currently **clean (0 vulnerabilities)**. The
+library's single runtime dependency is `@google/genai`, lazy-loaded and only constructed
+when `GEMINI_API_KEY` is set; everything else is a test-only **devDependency** that is
+never shipped.
 
-## 🔒 Invariants (COMPLEXITY §4) — where each is enforced and tested
+## 🔒 Invariants — where each is enforced and tested
 
 | # | Invariant | Enforced in | Proven in |
 |---|---|---|---|
@@ -186,21 +185,21 @@ runtime dependency is `@google/genai`, lazy-loaded and only constructed when
 | I5 | every fee row links to a payment event AND its decision chain | `core/ledger` (`verifyChain`) + `core/engine` (`linkRefs`) | ledger, engine, `verify_ledger.ts` |
 | I6 | ledger integrity (hash chain + sigs + Merkle) | `core/ledger` | ledger |
 
-## 🗺️ Module map → COMPLEXITY.md (with relative complexity)
+## 🗺️ Module map (with relative complexity)
 
-| Module | COMPLEXITY § | Role | Complexity |
-|---|---|---|:--:|
-| `src/core/mandate` | §3 | settlement-mandate middleware — the product's economic primitive; unforgeable single-use authorization tokens (a `WeakSet` no forgery can enter) | 🔴 High |
-| `src/core/ledger` (+`canonical`) | §2 | append-only Ed25519-signed hash chain, daily Merkle roots, canonical JSON, standalone verifier, I5 causal fee-linkage | 🔴 High |
-| `src/core/engine` (+`drafts`) | §1 | `RecoupEngine` — the full loop, wiring every component + ledgering every action + threading decision refs into every payment link | 🔴 High |
-| `src/core/machine` | §4 | escalation state machine `INTAKE→CADENCE→{NEGOTIATING↔AWAITING}→{PLAN_ACTIVE→PAID \| DISPUTED→CLIENT \| WRITEOFF \| OPTED_OUT}`; I3 absorbing by construction | 🟠 Medium |
-| `src/core/negotiate` (+`rulepacks`) | §3 | installment EV vs holdout, statutory late-interest rulepacks (CA/TX/NY, FIXTURE), exact-sum installment split | 🟠 Medium |
-| `src/core/critic` (+`templates`) | §1/§4 | compliance critic (tone/legal gate) + frozen hash-pinned template registry | 🟠 Medium |
-| `src/core/intent` (+`gemini`) | §1 | reply-intent classifier (offline heuristic; Gemini Flash adapter behind a seam) | 🟠 Medium |
-| `src/core/simulator` (+`personas`) | §5 | 12 deterministic debtor personas + nightly-eval runner (recovery / time-to-resolution / violation metrics) | 🟢 Low |
-| `src/core/actuators` | §2 | Gmail/Stripe/fee-meter ports + in-memory fakes; the send chokepoint | 🟢 Low |
-| `src/core/fixtures` | SEED_DATA | synthetic invoices, mandate, and scripted reply corpus | 🟢 Low |
-| `scripts/` | §5/§2 | `seed` · `self_test` · `verify_ledger` · `bench` | 🟢 Low |
+| Module | Role | Complexity |
+|---|---|:--:|
+| `src/core/mandate` | settlement-mandate middleware — the product's economic primitive; unforgeable single-use authorization tokens (a `WeakSet` no forgery can enter) | 🔴 High |
+| `src/core/ledger` (+`canonical`) | append-only Ed25519-signed hash chain, daily Merkle roots, canonical JSON, standalone verifier, I5 causal fee-linkage | 🔴 High |
+| `src/core/engine` (+`drafts`) | `RecoupEngine` — the full loop, wiring every component + ledgering every action + threading decision refs into every payment link | 🔴 High |
+| `src/core/machine` | escalation state machine `INTAKE→CADENCE→{NEGOTIATING↔AWAITING}→{PLAN_ACTIVE→PAID \| DISPUTED→CLIENT \| WRITEOFF \| OPTED_OUT}`; I3 absorbing by construction | 🟠 Medium |
+| `src/core/negotiate` (+`rulepacks`) | installment EV vs holdout, statutory late-interest rulepacks (CA/TX/NY, FIXTURE), exact-sum installment split | 🟠 Medium |
+| `src/core/critic` (+`templates`) | compliance critic (tone/legal gate) + frozen hash-pinned template registry | 🟠 Medium |
+| `src/core/intent` (+`gemini`) | reply-intent classifier (offline heuristic; Gemini Flash adapter behind a seam) | 🟠 Medium |
+| `src/core/simulator` (+`personas`) | 12 deterministic debtor personas + nightly-eval runner (recovery / time-to-resolution / violation metrics) | 🟢 Low |
+| `src/core/actuators` | Gmail/Stripe/fee-meter ports + in-memory fakes; the send chokepoint | 🟢 Low |
+| `src/core/fixtures` | synthetic invoices, mandate, and scripted reply corpus | 🟢 Low |
+| `scripts/` | `seed` · `self_test` · `verify_ledger` · `bench` | 🟢 Low |
 
 ## ✅ Status — Implemented / Stubbed / Not-started (honest)
 
@@ -256,8 +255,8 @@ build/
 │   ├── simulator/    # 12 debtor personas + eval runner
 │   ├── actuators/    # Gmail/Stripe/fee ports + in-memory fakes
 │   ├── fixtures.ts   # SYNTHETIC invoices, mandate, reply corpus
-│   ├── cli.ts        # `dunningkit` unified CLI (simulate · interest · verify · self-test · bench)
 │   └── types.ts      # shared domain types (Cents, Clock, MandatePolicy, …)
+├── src/cli.ts        # `dunningkit` unified CLI (simulate · interest · verify · self-test · bench)
 ├── scripts/          # seed · self_test (also exports verify/data) · verify_ledger · bench
 │                     #   · build_dashboard · capture_evidence
 ├── verify/           # /verify replay: index.html (self-contained) + data/ (real self_test output)
