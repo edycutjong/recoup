@@ -1,12 +1,54 @@
 version: 2
+
+# Tuned for a submission-window repository.
+#
+# The previous configuration (weekly, ungrouped, limit 10) opened a stream of
+# single-dependency PRs, one of which landed a vitest major mid-submission and
+# briefly broke the 203-test gate. The rules below make that impossible:
+#
+#   * monthly           — no churn inside a submission window
+#   * grouped           — one PR per ecosystem instead of ten
+#   * majors ignored    — a breaking bump can never arrive unattended;
+#                         upgrade majors by hand, deliberately, off-cycle
+#   * limit 2           — a hard ceiling on open noise
+#
+# Security fixes are unaffected: Dependabot security updates are a separate
+# mechanism and are not throttled by this file.
+
 updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    versioning-strategy: "increase-if-necessary"
+    commit-message:
+      # Conventional Commits, so release-please can classify these.
+      prefix: "fix(deps)"
+      prefix-development: "chore(deps)"
+      include: "scope"
+    groups:
+      npm-minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      # Never auto-open a major bump. This is the rule that would have stopped
+      # the mid-submission vitest incident.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "ci(deps)"
+      include: "scope"
+    groups:
+      github-actions:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
