@@ -26,3 +26,6 @@ coverage/
 
 # graphify knowledge graph (kitchen — never judge-facing)
 graphify-out/
+
+# Vercel CLI local link/build output
+.vercel/

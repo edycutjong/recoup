@@ -12,10 +12,12 @@ on:
   pull_request:
     branches: [main]
 
-# Cancel superseded runs for the same PR/branch.
+# Cancel superseded runs for the same PR — but NEVER cancel a run on main.
+# A main run carries the production deploy (Stage 4); cancelling it mid-flight
+# could leave the deployment created but the custom-domain alias unmoved.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # ── STAGE 1: Typecheck + tests (the 203-test suite) ──────────────────────
@@ -102,3 +104,142 @@ jobs:
         # runtime dependency is @google/genai, lazy-loaded and key-gated.
         run: npm audit --audit-level=high
         continue-on-error: true
+
+  # ── STAGE 4: Deploy the judge-facing /verify dashboard to Vercel ──────────
+  #
+  # SHAPE: the Vercel project serves ONLY the static contents of verify/
+  # (index.html + data/). There is no server, no build step and no Dockerfile —
+  # verify/index.html is a single self-contained page with its data spliced in
+  # at authoring time by `npm run verify:dashboard`. So this job uploads the
+  # verify/ directory verbatim and nothing else.
+  #
+  # ALIAS GOTCHA (observed on this exact project): `vercel deploy --prod`
+  # reliably produces a Ready production deployment but does NOT always move
+  # the custom-domain alias to it — the domain kept serving the previous build,
+  # and once returned DEPLOYMENT_NOT_FOUND outright. The verify → alias → verify
+  # loop below is therefore mandatory, not defensive.
+  #
+  # GATE: the job fails if https://recoup.edycu.dev does not end up serving
+  # byte-for-byte the verify/index.html from this commit. Failing here is safe —
+  # the alias only ever moves onto a deployment that is already Ready, so a red
+  # run leaves the previous good build serving the domain.
+  deploy:
+    name: "Stage 4 · Deploy /verify to Vercel"
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [quality, proof, secret-scan]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # Serialise production deploys across concurrent main runs.
+    concurrency:
+      group: vercel-production
+      cancel-in-progress: false
+    env:
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      PROD_DOMAIN: recoup.edycu.dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preflight — verify/ is a complete static site
+        run: |
+          set -euo pipefail
+          test -f verify/index.html      || { echo "::error::verify/index.html missing"; exit 1; }
+          test -f verify/data/dashboard.json || { echo "::error::verify/data/dashboard.json missing"; exit 1; }
+          # The dashboard shell + its spliced JSON payload must both be present.
+          grep -q 'id="recoup-data"' verify/index.html || { echo "::error::#recoup-data block missing"; exit 1; }
+          grep -q 'id="ledger"'      verify/index.html || { echo "::error::ledger section missing"; exit 1; }
+          grep -q 'id="simulator"'   verify/index.html || { echo "::error::simulator section missing"; exit 1; }
+          node -e 'JSON.parse(require("fs").readFileSync("verify/data/dashboard.json","utf8"))'
+          # Payload must be real data, not an empty placeholder.
+          bytes=$(node -e 'const h=require("fs").readFileSync("verify/index.html","utf8");const o=h.indexOf(">",h.indexOf("id=\"recoup-data\""))+1;const c=h.indexOf("</script>",o);process.stdout.write(String(c-o))')
+          echo "spliced JSON payload: ${bytes} bytes"
+          [ "$bytes" -gt 1000 ] || { echo "::error::#recoup-data payload looks empty (${bytes} bytes)"; exit 1; }
+          echo "EXPECTED_SHA=$(sha256sum verify/index.html | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@53
+
+      - name: Deploy verify/ to Vercel production
+        id: deploy
+        run: |
+          set -euo pipefail
+          vercel deploy --prod --yes --cwd verify --token "$VERCEL_TOKEN" > deploy.out 2> deploy.err || {
+            echo "::error::vercel deploy failed"; cat deploy.err; exit 1; }
+          cat deploy.err
+          url=$(grep -Eo 'https://[A-Za-z0-9._-]+\.vercel\.app' deploy.out | tail -n 1)
+          [ -n "$url" ] || { echo "::error::could not parse a deployment URL"; cat deploy.out; exit 1; }
+          echo "deployment: $url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Point the custom domain at the new build and smoke-test it
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -uo pipefail
+
+          # A pass means all four hold on the live custom domain:
+          #   HTTP 200 · dashboard markup present · data endpoint 200 ·
+          #   bytes identical to the verify/index.html in this commit.
+          live_matches() {
+            code=$(curl -sS --max-time 20 -H 'Cache-Control: no-cache' -H 'Pragma: no-cache' \
+                     -o live.html -w '%{http_code}' "https://${PROD_DOMAIN}/?cb=${GITHUB_RUN_ID}-${1}" || echo 000)
+            [ "$code" = "200" ] || { echo "  domain HTTP $code"; return 1; }
+            grep -q 'id="recoup-data"' live.html || { echo "  dashboard markup missing"; return 1; }
+            actual=$(sha256sum live.html | cut -d' ' -f1)
+            if [ "$actual" != "$EXPECTED_SHA" ]; then
+              echo "  serving a different build (live ${actual:0:12}… vs expected ${EXPECTED_SHA:0:12}…)"
+              return 1
+            fi
+            dcode=$(curl -sS --max-time 20 -o live-data.json -w '%{http_code}' \
+                      "https://${PROD_DOMAIN}/data/dashboard.json" || echo 000)
+            [ "$dcode" = "200" ] || { echo "  data/dashboard.json HTTP $dcode"; return 1; }
+            node -e 'JSON.parse(require("fs").readFileSync("live-data.json","utf8"))' || return 1
+            return 0
+          }
+
+          # 1) Vercel sometimes moves the alias on its own. Give it a short grace
+          #    period before intervening.
+          aliased=0
+          for i in 1 2 3 4 5 6; do
+            echo "check ${i}/6 — is ${PROD_DOMAIN} already on the new build?"
+            if live_matches "pre${i}"; then aliased=1; break; fi
+            sleep 5
+          done
+
+          # 2) It usually is not. Move the alias explicitly — the known gotcha.
+          if [ "$aliased" -ne 1 ]; then
+            echo "alias did not move on its own — running: vercel alias set"
+            for attempt in 1 2 3; do
+              if vercel alias set "$DEPLOY_URL" "$PROD_DOMAIN" \
+                   --token "$VERCEL_TOKEN" --scope "$VERCEL_ORG_ID"; then
+                break
+              fi
+              echo "alias attempt ${attempt} failed; retrying"
+              sleep 10
+              [ "$attempt" -lt 3 ] || { echo "::error::vercel alias set failed 3x"; exit 1; }
+            done
+          fi
+
+          # 3) Hard gate. The live judged artifact must serve THIS build.
+          for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            echo "post-alias check ${i}/12"
+            if live_matches "post${i}"; then
+              echo "LIVE OK — https://${PROD_DOMAIN} serves the build from ${GITHUB_SHA}"
+              {
+                echo "### Production deploy"
+                echo ""
+                echo "- Deployment: ${DEPLOY_URL}"
+                echo "- Live: https://${PROD_DOMAIN} (HTTP 200, dashboard markup present)"
+                echo "- sha256(index.html): \`${EXPECTED_SHA}\`"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 10
+          done
+
+          echo "::error::https://${PROD_DOMAIN} is NOT serving the new build after aliasing."
+          echo "::error::Deployment ${DEPLOY_URL} is Ready; the previous build is still on the domain."
+          exit 1
