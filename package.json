@@ -1,6 +1,6 @@
 {
   "name": "@recoup/dunningkit-core",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Recoup offline-testable core: escalation state machine, settlement-mandate middleware, signed decision ledger, intent classifier, negotiation engine, compliance critic, actuator fakes, debtor simulator.",
   "type": "module",
