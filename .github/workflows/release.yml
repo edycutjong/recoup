@@ -8,9 +8,22 @@ name: Release
 # writes CHANGELOG.md. Nothing is published to npm — the package is private and
 # the release artifact judges care about is the tagged source + changelog.
 #
-# Baseline is pinned at 1.0.0 in .release-please-manifest.json (matching the
-# already-shipped package.json version), so the first automated release will be
-# 1.0.1 (fix) or 1.1.0 (feat) rather than restarting the version line.
+# Baseline was pinned at 1.0.0 in .release-please-manifest.json (matching the
+# already-shipped package.json version), so the version line continues rather
+# than restarting; the first automated release was 1.1.0.
+#
+# NOTE on release-please-config.json: `package-name` is deliberately "" and must
+# stay that way. release-please derives a tag "component" from the package name,
+# and for a scoped name like @recoup/dunningkit-core that component is
+# "dunningkit-core". With a single package the release branch is
+# `release-please--branches--main`, which carries no component — so at release
+# time the strategy compares an empty branch component against
+# "dunningkit-core", logs `PR component: undefined does not match configured
+# component`, and silently declines to tag the merged release PR. An empty
+# package-name makes the derived component empty and the two sides agree. It
+# affects nothing else here: package.json and package-lock.json are updated by
+# path, and the only consumers of package-name (samples/package.json,
+# changelog.json) do not exist in this repo.
 
 on:
   push:
